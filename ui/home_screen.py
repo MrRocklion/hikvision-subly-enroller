@@ -108,4 +108,17 @@ class HomeScreen(QWidget):
 
     def ir_a_segunda_ventana(self):
         self.stacked_widget.setCurrentIndex(1)
+    
+    def getUser(self,token):
+        url = "http://localhost:4000/api/users/validate?dni=1108595682"
+        payload = {}
+        headers = {
+        'x-tenant-id': 'bbd38caf-8c63-4bd3-9ea5-4a73379f555f',
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+        }
+        response = requests.request("GET", url, headers=headers, data=payload)
+        print(response)
+        return "Suscripción activa hasta el 31/12/2023"
 

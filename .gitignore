@@ -70,3 +70,4 @@ htmlcov/
 *.log
 
 # Flask stuff:  #
+*.env

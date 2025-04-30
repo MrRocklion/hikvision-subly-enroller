@@ -11,6 +11,7 @@ class VentanaPrincipal(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
+        self.token = None
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -26,6 +27,9 @@ class VentanaPrincipal(QWidget):
         layout.addWidget(self.stacked_widget)
         self.setLayout(layout)
         self.setWindowTitle("Programa con QStackedWidget")
+        
+    def authenticate(self):
+        self.stacked_widget.setCurrentIndex(1)
 
 
 if __name__ == "__main__":
