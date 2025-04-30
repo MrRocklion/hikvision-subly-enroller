@@ -9,9 +9,10 @@ import cv2
 
 
 class EnrollScreen(QWidget):
-    def __init__(self, stacked_widget):
+    def __init__(self, stacked_widget,appParams:dict):
         super().__init__()
         self.stacked_widget = stacked_widget
+        self.appParams = appParams
         self.cap = None
         self.timer = QTimer()
         self.init_ui()

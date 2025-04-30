@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-import sys
+from datetime import datetime,timezone
 import requests
 
 # Diccionario simulado
@@ -24,10 +24,12 @@ datos_personas = {
 }
 
 class HomeScreen(QWidget):
-    def __init__(self, stacked_widget):
+    def __init__(self, stacked_widget,appParams:dict):
         super().__init__()
         self.stacked_widget = stacked_widget
         self.init_ui()
+        self.appParams = appParams
+        self.userInfo = {}
 
     def init_ui(self):
         self.setWindowTitle("Buscar Información de Cédula")
@@ -80,7 +82,10 @@ class HomeScreen(QWidget):
 
     def buscar_info(self):
         cedula = self.input_cedula.text().strip()
-        info = datos_personas.get(cedula)
+        info = self.search_by_dni(cedula)
+        if not cedula:
+            self.resultado_html.setHtml("<p style='color: red;'>Por favor, ingrese una cédula válida.</p>")
+            return
 
         if info:
             html = f"""
@@ -89,12 +94,16 @@ class HomeScreen(QWidget):
                         border: 1px solid #ccc; max-width: 400px; margin: auto; font-family: Arial, sans-serif;">
                 <h2 style="color: #2E86C1; text-align: center; margin-bottom: 20px;">Datos Encontrados</h2>
                 <p><b>Nombre:</b> {info['nombre']}</p>
-                <p><b>Edad:</b> {info['edad']} años</p>
                 <p><b>Dirección:</b> {info['direccion']}</p>
                 <p><b>Teléfono:</b> {info['telefono']}</p>
+                <p><b>Correo:</b> {info['email']}</p>
+                <p><b>Subscripcion Activa:</b> {info['status_subscription']}</p>
+                <p><b>Fecha de Inicio:</b> {info['sub_start_date']}</p>
+                <p><b>Fecha de finalizacion:</b> {info['sub_end_date']}</p>
             </div>
             </body>
             """
+            self.userInfo = info
         else:
             html = """
             <div style="background-color: #ffe6e6; padding: 20px; border-radius: 10px; 
@@ -105,6 +114,38 @@ class HomeScreen(QWidget):
             """
 
         self.resultado_html.setHtml(html)
+    def search_by_dni(self,dni):
+        url = f"{self.appParams['base_url']}/api/users/validate?dni={dni}"
+        payload = {}
+        headers = {
+        'x-tenant-id': self.appParams['tenant_id'],
+        'Authorization': f'Bearer {self.appParams["token"]}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+        }
+        response = requests.request("GET", url, headers=headers, data=payload)
+        result = response.json()
+        user_subscriptions = result['result']['user_subscriptions']
+        current_sub = None
+        if len(user_subscriptions)>=1:
+            current_sub = user_subscriptions[-1]
+        print(current_sub)
+        now = datetime.now(timezone.utc)
+        end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        estado = 'inactiva'
+        if now > end_date:
+            estado = 'inactiva'
+        info = {
+            "nombre": result['result']['name'] + " " + result['result']['lastname'],
+            "direccion": result['result']['address'],
+            "telefono": result['result']['phone'],
+            "email": result['result']['email'],
+            "sub_start_date": start_date,
+            "sub_end_date":end_date,
+            'status_subscription':estado
+        }
+        return info
 
     def ir_a_segunda_ventana(self):
         self.stacked_widget.setCurrentIndex(1)
