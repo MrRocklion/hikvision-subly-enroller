@@ -2,34 +2,19 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QLineEdit, 
     QTextBrowser, QLabel, QFormLayout, QHBoxLayout
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt , Signal
 from PySide6.QtGui import QFont
 from datetime import datetime,timezone
 import requests
 
-# Diccionario simulado
-datos_personas = {
-    "1234567890": {
-        "nombre": "Juan Pérez",
-        "edad": 30,
-        "direccion": "Av. Siempre Viva 742",
-        "telefono": "0987654321"
-    },
-    "0987654321": {
-        "nombre": "María García",
-        "edad": 25,
-        "direccion": "Calle Falsa 123",
-        "telefono": "0912345678"
-    }
-}
-
 class HomeScreen(QWidget):
+    datos_obtenidos = Signal(dict)
     def __init__(self, stacked_widget,appParams:dict):
         super().__init__()
         self.stacked_widget = stacked_widget
-        self.init_ui()
         self.appParams = appParams
         self.userInfo = {}
+        self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("Buscar Información de Cédula")
@@ -129,7 +114,6 @@ class HomeScreen(QWidget):
         current_sub = None
         if len(user_subscriptions)>=1:
             current_sub = user_subscriptions[-1]
-        print(current_sub)
         now = datetime.now(timezone.utc)
         end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
         start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
@@ -141,10 +125,34 @@ class HomeScreen(QWidget):
             "direccion": result['result']['address'],
             "telefono": result['result']['phone'],
             "email": result['result']['email'],
-            "sub_start_date": start_date,
-            "sub_end_date":end_date,
+            "sub_start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+            "sub_end_date":end_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
             'status_subscription':estado
         }
+        gender = "female"
+        if result['result']['gender'] == "MASCULINO":
+            gender = "male"
+        user_data={
+                "enroll_data":{"UserInfo":{
+                    "employeeNo":result['result']['id'],
+                    "name":str(info['nombre']).upper(),
+                    "userType":"Normal",
+                    "Valid":{"enable":True,"beginTime":info['sub_start_date'],"endTime":info['sub_end_date'],"timeType":"local"},
+                    "doorRight":"1","RightPlan":[{"doorNo":1,"planTemplateNo":"1"}],
+                    "gender":gender,
+                    "localUIRight":False,
+                    "maxOpenDoorTime":0,
+                    "userVerifyMode":"",
+                    "groupId":3,
+                    "userLevel":"Employee",
+                    "localPassword":""
+                }
+                },
+                "face_data":{'FaceDataRecord': '{"faceLibType":"blackFD","FDID":"1","FPID":"25"}'}
+            }
+            
+        
+        self.datos_obtenidos.emit(user_data)
         return info
 
     def ir_a_segunda_ventana(self):
@@ -160,6 +168,5 @@ class HomeScreen(QWidget):
         'Accept': 'application/json'
         }
         response = requests.request("GET", url, headers=headers, data=payload)
-        print(response)
         return "Suscripción activa hasta el 31/12/2023"
 
