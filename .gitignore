@@ -4,6 +4,8 @@
 *.pyd
 __pycache__/*
 
+**/data
+
 # Distribution / packaging
 .Python
 build/

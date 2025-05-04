@@ -72,7 +72,7 @@ class HomeScreen(QWidget):
             self.resultado_html.setHtml("<p style='color: red;'>Por favor, ingrese una cédula válida.</p>")
             return
 
-        if info:
+        if info['status']:
             html = f"""
             <body style="font-family: Arial, sans-serif; background-color: #212f3d;">
             <div style="background-color: #212f3d; padding: 20px; border-radius: 10px; 
@@ -91,10 +91,10 @@ class HomeScreen(QWidget):
             self.userInfo = info
         else:
             html = """
-            <div style="background-color: #ffe6e6; padding: 20px; border-radius: 10px; 
+            <div style="padding: 20px; border-radius: 10px; 
                         border: 1px solid #ff9999; max-width: 400px; margin: auto; font-family: Arial, sans-serif;">
-                <h2 style="color: red; text-align: center;">No se encontró información</h2>
-                <p style="text-align: center;">Por favor verifique la cédula ingresada.</p>
+                <h2 style="color: red; text-align: center;">El usuario No tiene una suscripcion Activa</h2>
+                <p style="text-align: center;">Este Sistema es solo para clientes con suscripcion Activa</p>
             </div>
             """
 
@@ -110,56 +110,71 @@ class HomeScreen(QWidget):
         }
         response = requests.request("GET", url, headers=headers, data=payload)
         result = response.json()
+        
         user_subscriptions = result['result']['user_subscriptions']
         current_sub = None
+
+        info = {}
         if len(user_subscriptions)>=1:
             current_sub = user_subscriptions[-1]
-        now = datetime.now(timezone.utc)
-        end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-        start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-        estado = 'inactiva'
-        if now > end_date:
+            now = datetime.now(timezone.utc)
+            end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
             estado = 'inactiva'
-        info = {
-            "nombre": result['result']['name'] + " " + result['result']['lastname'],
-            "direccion": result['result']['address'],
-            "telefono": result['result']['phone'],
-            "email": result['result']['email'],
-            "sub_start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "sub_end_date":end_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            'status_subscription':estado
-        }
-        gender = "female"
-        if result['result']['gender'] == "MASCULINO":
-            gender = "male"
-        user_data={
-                "enroll_data":{"UserInfo":{
-                    "employeeNo":result['result']['id'],
-                    "name":str(info['nombre']).upper(),
-                    "userType":"Normal",
-                    "Valid":{"enable":True,"beginTime":info['sub_start_date'],"endTime":info['sub_end_date'],"timeType":"local"},
-                    "doorRight":"1","RightPlan":[{"doorNo":1,"planTemplateNo":"1"}],
-                    "gender":gender,
-                    "localUIRight":False,
-                    "maxOpenDoorTime":0,
-                    "userVerifyMode":"",
-                    "groupId":3,
-                    "userLevel":"Employee",
-                    "localPassword":""
-                }
-                },
-                "face_data":{'FaceDataRecord': '{"faceLibType":"blackFD","FDID":"1","FPID":"25"}'}
+            if now > end_date:
+                estado = 'inactiva'
+            info = {
+                "status":True,
+                "nombre": result['result']['name'] + " " + result['result']['lastname'],
+                "direccion": result['result']['address'],
+                "telefono": result['result']['phone'],
+                "email": result['result']['email'],
+                "sub_start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                "sub_end_date":end_date.strftime("%Y-%m-%dT%H:%M:%S"),
+                'status_subscription':estado
             }
+            gender = "female"
+            if result['result']['gender'] == "MASCULINO":
+                gender = "male"
+                user_data={
+                        "id":str(result['result']['id']),
+                        "enroll_data":{"UserInfo":{
+                            "employeeNo":str(result['result']['id']),
+                            "name":str(info['nombre']).upper(),
+                            "userType":"normal",
+                            "Valid":{"enable":True,"beginTime":info['sub_start_date'],"endTime":info['sub_end_date'],"timeType":"local"},
+                            "doorRight":"1","RightPlan":[{"doorNo":1,"planTemplateNo":"1"}],
+                            "gender":gender,
+                            "localUIRight":False,
+                            "maxOpenDoorTime":0,
+                            "userVerifyMode":"",
+                            "groupId":3,
+                            "userLevel":"Employee",
+                            "localPassword":""
+                        }
+                        },
+                        "face_data":{"FaceDataRecord":'{"faceLibType":"blackFD","FDID":"1","FPID":'+'"'+f"{str(result['result']['id'])}"+'"'+'}'}
+                }
+                self.datos_obtenidos.emit(user_data)
+        else:
+            info = {
+                "status":False,
+                "nombre": '',
+                "direccion":'',
+                "telefono":'',
+                "email":'',
+                "sub_start_date":'',
+                "sub_end_date":'',
+                'status_subscription':''
+                }
             
-        
-        self.datos_obtenidos.emit(user_data)
         return info
 
     def ir_a_segunda_ventana(self):
         self.stacked_widget.setCurrentIndex(1)
     
     def getUser(self,token):
-        url = "http://localhost:4000/api/users/validate?dni=1108595682"
+        url = f"{self.appParams['base_url']}/api/users/validate?dni=1108595682"
         payload = {}
         headers = {
         'x-tenant-id': 'bbd38caf-8c63-4bd3-9ea5-4a73379f555f',
