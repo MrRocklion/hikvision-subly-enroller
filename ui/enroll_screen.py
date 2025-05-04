@@ -39,23 +39,41 @@ class EnrollScreen(QWidget):
         self.image_label = QLabel("Iniciando cámara...")
         self.image_label.setAlignment(Qt.AlignCenter)
 
-        self.captureBtn = QPushButton("CAPTURAR IMAGEN")
+        self.captureBtn = QPushButton("TOMAR FOTO")
+        self.retryBtn = QPushButton("VOLVER A TOMAR FOTO")
         self.registerBtn = QPushButton("REGISTRAR")
         self.cancelBtn = QPushButton("CANCELAR")
 
         self.captureBtn.clicked.connect(self.capturar_imagen)
+        self.retryBtn.clicked.connect(self.volver_a_tomar_foto)
         self.cancelBtn.clicked.connect(self.regresar_a_primera_ventana)
         self.registerBtn.clicked.connect(self.isapi_load_face)
 
         self.layout.addWidget(self.captureBtn)
+        self.layout.addWidget(self.retryBtn)
         self.layout.addWidget(self.registerBtn)
         self.layout.addWidget(self.cancelBtn)
         self.layout.addWidget(self.image_label)
 
         self.setLayout(self.layout)
-
         self.iniciar_camara()
+        #valores iniciales por defecto
+        
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.timer.start(30)
+        self.captureBtn.setDisabled(False)
+        self.retryBtn.setDisabled(True)
+        self.registerBtn.setDisabled(True)
+        
+
+    def volver_a_tomar_foto(self):
+        self.captureBtn.setDisabled(False)
+        self.retryBtn.setDisabled(True)
+        self.registerBtn.setDisabled(True)
+        if self.cap and not self.timer.isActive():
+            self.timer.start(30)  # Vu
     def iniciar_camara(self):
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
@@ -100,10 +118,6 @@ class EnrollScreen(QWidget):
         if self.cap and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
-                self.timer.stop()
-                self.cap.release()
-                self.cap = None
-
                 frame = self.crop_to_portrait(frame, aspect_ratio=(4, 5))
 
                 # Ruta relativa al directorio del proyecto
@@ -126,6 +140,10 @@ class EnrollScreen(QWidget):
                     self.image_label.width(), self.image_label.height(),
                     Qt.KeepAspectRatio
                 ))
+                self.timer.stop()
+                self.captureBtn.setDisabled(True)
+                self.retryBtn.setDisabled(False)
+                self.registerBtn.setDisabled(False)
     def isapi_load_face(self):
         # Enrolamos inicialmente al usuario:
         url_enroll = f"{self.appParams['isapi_url']}/ISAPI/AccessControl/UserInfo/Record?format=json"
@@ -169,8 +187,4 @@ class EnrollScreen(QWidget):
     def recibir_datos(self, datos):
         self.userData = datos
     def regresar_a_primera_ventana(self):
-        if self.cap and self.cap.isOpened():
-            self.timer.stop()
-            self.cap.release()
-            self.cap = None
         self.stacked_widget.setCurrentIndex(0)

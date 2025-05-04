@@ -1,15 +1,28 @@
+import logging
+from datetime import datetime, timezone
+
+import requests
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QPushButton, QVBoxLayout, QLineEdit, 
+    QApplication, QWidget, QPushButton, QVBoxLayout, QLineEdit,
     QTextBrowser, QLabel, QFormLayout, QHBoxLayout
 )
-from PySide6.QtCore import Qt , Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
-from datetime import datetime,timezone
-import requests
+
+# Configuración del logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
 
 class HomeScreen(QWidget):
     datos_obtenidos = Signal(dict)
-    def __init__(self, stacked_widget,appParams:dict):
+
+    def __init__(self, stacked_widget, appParams: dict):
         super().__init__()
         self.stacked_widget = stacked_widget
         self.appParams = appParams
@@ -22,13 +35,11 @@ class HomeScreen(QWidget):
         main_layout.setContentsMargins(50, 50, 50, 50)
         main_layout.setSpacing(20)
 
-        # Título
         titulo = QLabel("Formulario de Búsqueda")
         titulo.setFont(QFont("Arial", 18, QFont.Bold))
         titulo.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(titulo)
 
-        # Formulario
         form_layout = QFormLayout()
         form_layout.setFormAlignment(Qt.AlignCenter)
 
@@ -36,7 +47,6 @@ class HomeScreen(QWidget):
         self.input_cedula.setPlaceholderText("Ingrese la cédula...")
         self.input_cedula.setFixedWidth(250)
 
-        # Botón Buscar
         self.boton_buscar = QPushButton("Buscar")
         self.boton_buscar.setFixedWidth(100)
         self.boton_buscar.clicked.connect(self.buscar_info)
@@ -49,13 +59,11 @@ class HomeScreen(QWidget):
         form_layout.addRow(form_container)
         main_layout.addLayout(form_layout)
 
-        #Boton Enrrollar
         self.boton_enrollar = QPushButton("Enrrollar")
         self.boton_enrollar.setFixedWidth(100)
         self.boton_enrollar.clicked.connect(self.ir_a_segunda_ventana)
-        
+        self.boton_enrollar.setDisabled(True)
 
-        # Visualización de resultados en HTML
         self.resultado_html = QTextBrowser()
         self.resultado_html.setOpenExternalLinks(True)
         self.resultado_html.setStyleSheet("background-color: #212f3d; border: 1px solid #ccc;")
@@ -66,122 +74,151 @@ class HomeScreen(QWidget):
         self.setMinimumSize(500, 400)
 
     def buscar_info(self):
+        self.boton_buscar.setDisabled(True)
         cedula = self.input_cedula.text().strip()
-        info = self.search_by_dni(cedula)
         if not cedula:
             self.resultado_html.setHtml("<p style='color: red;'>Por favor, ingrese una cédula válida.</p>")
+            logging.warning("Intento de búsqueda con cédula vacía.")
             return
 
-        if info['status']:
+        logging.info(f"Buscando información para cédula: {cedula}")
+        try:
+
+            info = self.search_by_dni(cedula)
+        except Exception as e:
+            self.resultado_html.setHtml("<p style='color: red;'>Error al buscar la información. Intente nuevamente.</p>")
+            logging.error(f"Error en búsqueda de cédula {cedula}: {e}")
+            self.boton_buscar.setDisabled(False)
+            return
+
+        if info["status"]:
             html = f"""
-            <body style="font-family: Arial, sans-serif; background-color: #212f3d;">
             <div style="background-color: #212f3d; padding: 20px; border-radius: 10px; 
-                        border: 1px solid #ccc; max-width: 400px; margin: auto; font-family: Arial, sans-serif;">
-                <h2 style="color: #2E86C1; text-align: center; margin-bottom: 20px;">Datos Encontrados</h2>
+                        border: 1px solid #ccc; max-width: 400px; margin: auto;">
+                <h2 style="color: #2E86C1; text-align: center;">Datos Encontrados</h2>
                 <p><b>Nombre:</b> {info['nombre']}</p>
                 <p><b>Dirección:</b> {info['direccion']}</p>
                 <p><b>Teléfono:</b> {info['telefono']}</p>
                 <p><b>Correo:</b> {info['email']}</p>
-                <p><b>Subscripcion Activa:</b> {info['status_subscription']}</p>
+                <p><b>Subscripción Activa:</b> {info['status_subscription']}</p>
                 <p><b>Fecha de Inicio:</b> {info['sub_start_date']}</p>
-                <p><b>Fecha de finalizacion:</b> {info['sub_end_date']}</p>
+                <p><b>Fecha de Finalización:</b> {info['sub_end_date']}</p>
             </div>
-            </body>
             """
+            self.boton_enrollar.setDisabled(False)
             self.userInfo = info
         else:
             html = """
             <div style="padding: 20px; border-radius: 10px; 
-                        border: 1px solid #ff9999; max-width: 400px; margin: auto; font-family: Arial, sans-serif;">
-                <h2 style="color: red; text-align: center;">El usuario No tiene una suscripcion Activa</h2>
-                <p style="text-align: center;">Este Sistema es solo para clientes con suscripcion Activa</p>
+                        border: 1px solid #ff9999; max-width: 400px; margin: auto;">
+                <h2 style="color: red; text-align: center;">Usuario sin subscripción activa</h2>
+                <p style="text-align: center;">Este sistema es solo para clientes con subscripción activa.</p>
             </div>
             """
-
+            self.boton_enrollar.setDisabled(True)
+        self.boton_buscar.setDisabled(False)
         self.resultado_html.setHtml(html)
-    def search_by_dni(self,dni):
-        url = f"{self.appParams['base_url']}/api/users/validate?dni={dni}"
-        payload = {}
-        headers = {
-        'x-tenant-id': self.appParams['tenant_id'],
-        'Authorization': f'Bearer {self.appParams["token"]}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-        }
-        response = requests.request("GET", url, headers=headers, data=payload)
-        result = response.json()
-        
-        user_subscriptions = result['result']['user_subscriptions']
-        current_sub = None
 
-        info = {}
-        if len(user_subscriptions)>=1:
-            current_sub = user_subscriptions[-1]
-            now = datetime.now(timezone.utc)
-            end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-            start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-            estado = 'inactiva'
-            if now > end_date:
-                estado = 'inactiva'
-            info = {
-                "status":True,
-                "nombre": result['result']['name'] + " " + result['result']['lastname'],
-                "direccion": result['result']['address'],
-                "telefono": result['result']['phone'],
-                "email": result['result']['email'],
-                "sub_start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S"),
-                "sub_end_date":end_date.strftime("%Y-%m-%dT%H:%M:%S"),
-                'status_subscription':estado
+    def search_by_dni(self, dni):
+        self.boton_enrollar.setDisabled(False)
+        url = f"{self.appParams['base_url']}/api/users/validate?dni={dni}"
+        headers = {
+            'x-tenant-id': self.appParams['tenant_id'],
+            'Authorization': f"Bearer {self.appParams['token']}",
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        result = response.json()
+
+        info = {
+            "id": "0", "status": False, "nombre": "", "direccion": "",
+            "telefono": "", "email": "", "sub_start_date": "",
+            "sub_end_date": "", "status_subscription": ""
+        }
+
+        if result.get("result") is None:
+            logging.info(f"Cédula {dni} no encontrada en sistema.")
+            return info
+
+        user = result["result"]
+        subs = user.get("user_subscriptions", [])
+        if not subs:
+            logging.info(f"Usuario {dni} sin subscripciones registradas.")
+            return info
+
+        current_sub = subs[-1]
+        now = datetime.now(timezone.utc)
+        start_date = datetime.strptime(current_sub['start_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        end_date = datetime.strptime(current_sub['end_date'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+
+        estado = 'ACTIVA' if now <= end_date else 'INACTIVA'
+        gender = "male" if user.get("gender") == "MASCULINO" else "female"
+
+        info.update({
+            "id": str(user['id']),
+            "status": True if estado == 'ACTIVA' else False,
+            "nombre": f"{user['name']} {user['lastname']}",
+            "direccion": user['address'],
+            "telefono": user['phone'],
+            "email": user['email'],
+            "sub_start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S"),
+            "sub_end_date": end_date.strftime("%Y-%m-%dT%H:%M:%S"),
+            "status_subscription": estado
+        })
+
+        user_data = {
+            "id": str(user['id']),
+            "enroll_data": {
+                "UserInfo": {
+                    "employeeNo": str(user['id']),
+                    "name": info['nombre'].upper(),
+                    "userType": "normal",
+                    "Valid": {
+                        "enable": True,
+                        "beginTime": info['sub_start_date'],
+                        "endTime": info['sub_end_date'],
+                        "timeType": "local"
+                    },
+                    "doorRight": "1",
+                    "RightPlan": [{"doorNo": 1, "planTemplateNo": "1"}],
+                    "gender": gender,
+                    "localUIRight": False,
+                    "maxOpenDoorTime": 0,
+                    "userVerifyMode": "",
+                    "groupId": 3,
+                    "userLevel": "Employee",
+                    "localPassword": ""
+                }
+            },
+            "face_data": {
+                "FaceDataRecord": f'{{"faceLibType":"blackFD","FDID":"1","FPID":"{user["id"]}"}}'
             }
-            gender = "female"
-            if result['result']['gender'] == "MASCULINO":
-                gender = "male"
-                user_data={
-                        "id":str(result['result']['id']),
-                        "enroll_data":{"UserInfo":{
-                            "employeeNo":str(result['result']['id']),
-                            "name":str(info['nombre']).upper(),
-                            "userType":"normal",
-                            "Valid":{"enable":True,"beginTime":info['sub_start_date'],"endTime":info['sub_end_date'],"timeType":"local"},
-                            "doorRight":"1","RightPlan":[{"doorNo":1,"planTemplateNo":"1"}],
-                            "gender":gender,
-                            "localUIRight":False,
-                            "maxOpenDoorTime":0,
-                            "userVerifyMode":"",
-                            "groupId":3,
-                            "userLevel":"Employee",
-                            "localPassword":""
-                        }
-                        },
-                        "face_data":{"FaceDataRecord":'{"faceLibType":"blackFD","FDID":"1","FPID":'+'"'+f"{str(result['result']['id'])}"+'"'+'}'}
-                }
-                self.datos_obtenidos.emit(user_data)
-        else:
-            info = {
-                "status":False,
-                "nombre": '',
-                "direccion":'',
-                "telefono":'',
-                "email":'',
-                "sub_start_date":'',
-                "sub_end_date":'',
-                'status_subscription':''
-                }
-            
+        }
+
+        self.datos_obtenidos.emit(user_data)
+        logging.info(f"Datos obtenidos correctamente para cédula {dni}.")
         return info
 
     def ir_a_segunda_ventana(self):
+        logging.info("Navegando a la pantalla de enrolamiento.")
         self.stacked_widget.setCurrentIndex(1)
-    
-    def getUser(self,token):
-        url = f"{self.appParams['base_url']}/api/users/validate?dni=1108595682"
-        payload = {}
-        headers = {
-        'x-tenant-id': 'bbd38caf-8c63-4bd3-9ea5-4a73379f555f',
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-        }
-        response = requests.request("GET", url, headers=headers, data=payload)
-        return "Suscripción activa hasta el 31/12/2023"
 
+    def getUser(self, token):
+        logging.info("Solicitando datos de usuario por defecto para testing.")
+        url = f"{self.appParams['base_url']}/api/users/validate?dni=1108595682"
+        headers = {
+            'x-tenant-id': 'bbd38caf-8c63-4bd3-9ea5-4a73379f555f',
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            return "Suscripción activa hasta el 31/12/2023"
+        except requests.RequestException as e:
+            logging.error(f"Error obteniendo datos del usuario de prueba: {e}")
+            return "Error al obtener datos del usuario"
