@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout,
-    QLabel, QStackedWidget
+    QLabel, QStackedWidget,QMessageBox
 )
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, QTimer
@@ -140,8 +140,8 @@ class EnrollScreen(QWidget):
                     self.image_label.width(), self.image_label.height(),
                     Qt.KeepAspectRatio
                 ))
-                self.timer.stop()
                 self.captureBtn.setDisabled(True)
+                self.timer.stop()
                 self.retryBtn.setDisabled(False)
                 self.registerBtn.setDisabled(False)
     def isapi_load_face(self):
@@ -155,9 +155,7 @@ class EnrollScreen(QWidget):
         data_dir = os.path.join(src_dir, "data")
         image_name = str(self.userData['id']) +".jpg"
         total_path = os.path.join(data_dir, image_name)
-        print(total_path)
         files= [('img',(image_name,open(total_path,'rb'),'image/jpeg'))]
-        print("Registramos al usuario")
         try:
             response_enroller = requests.post(
                 url_enroll,
@@ -167,9 +165,8 @@ class EnrollScreen(QWidget):
                 verify=False
             )
             if response_enroller.status_code == 200:
-                print(self.userData['face_data'])
                 time.sleep(2)
-                response_face_id = requests.put(
+                requests.put(
                     url_face_id,
                     headers=headers,
                     files=files,
@@ -177,8 +174,15 @@ class EnrollScreen(QWidget):
                     auth=HTTPDigestAuth(self.appParams['isapi_user'], self.appParams['isapi_password']),
                     verify=False
                 )
-                print(response_face_id)
                 self.stacked_widget.setCurrentIndex(0)
+            elif response_enroller.status_code == 400:
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle("Subly Info")
+                msg_box.setText("Usuario ya registrado!")
+                msg_box.setIcon(QMessageBox.Information)
+                msg_box.addButton("Cerrar", QMessageBox.AcceptRole)
+                msg_box.exec()
+
         except requests.exceptions.RequestException as e:
             print("Ocurrió un error al intentar registrar al usuario:")
             print(str(e))
